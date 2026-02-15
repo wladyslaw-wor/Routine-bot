@@ -6,6 +6,7 @@ if (tg) {
 
 const state = {
   authHeaders: {},
+  tgInitData: '',
   tasks: [],
   todayInstances: [],
   weekInstances: [],
@@ -50,6 +51,7 @@ function clearLocalStart(scope) {
 function bootstrapAuth() {
   const initData = tg?.initData;
   if (initData) {
+    state.tgInitData = initData;
     state.authHeaders = {
       'X-Telegram-Init-Data': initData,
       Authorization: `tma ${initData}`,
@@ -62,7 +64,12 @@ function bootstrapAuth() {
 }
 
 async function api(path, options = {}) {
-  const res = await fetch(`/api${path}`, {
+  let authPath = `/api${path}`;
+  if (state.tgInitData) {
+    const sep = authPath.includes('?') ? '&' : '?';
+    authPath = `${authPath}${sep}initData=${encodeURIComponent(state.tgInitData)}`;
+  }
+  const res = await fetch(authPath, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

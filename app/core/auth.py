@@ -4,7 +4,7 @@ import json
 from typing import Annotated
 from urllib.parse import parse_qsl
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -81,11 +81,14 @@ def get_current_user(
     db: Annotated[Session, Depends(get_db)],
     x_telegram_init_data: Annotated[str | None, Header()] = None,
     authorization: Annotated[str | None, Header()] = None,
+    init_data_query: Annotated[str | None, Query(alias='initData')] = None,
     x_telegram_user_id: Annotated[int | None, Header()] = None,
 ) -> TelegramUser:
     init_data = x_telegram_init_data
     if not init_data and authorization and authorization.lower().startswith('tma '):
         init_data = authorization[4:].strip()
+    if not init_data and init_data_query:
+        init_data = init_data_query
 
     if init_data:
         user_payload = validate_telegram_init_data(init_data)
