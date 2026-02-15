@@ -80,10 +80,15 @@ def _get_or_create_fake_user(db: Session, fake_user_id: int) -> TelegramUser:
 def get_current_user(
     db: Annotated[Session, Depends(get_db)],
     x_telegram_init_data: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
     x_telegram_user_id: Annotated[int | None, Header()] = None,
 ) -> TelegramUser:
-    if x_telegram_init_data:
-        user_payload = validate_telegram_init_data(x_telegram_init_data)
+    init_data = x_telegram_init_data
+    if not init_data and authorization and authorization.lower().startswith('tma '):
+        init_data = authorization[4:].strip()
+
+    if init_data:
+        user_payload = validate_telegram_init_data(init_data)
         return _get_or_create_user(db, user_payload)
 
     if settings.debug_allow_fake_auth and x_telegram_user_id:

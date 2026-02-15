@@ -50,7 +50,10 @@ function clearLocalStart(scope) {
 function bootstrapAuth() {
   const initData = tg?.initData;
   if (initData) {
-    state.authHeaders = { 'X-Telegram-Init-Data': initData };
+    state.authHeaders = {
+      'X-Telegram-Init-Data': initData,
+      Authorization: `tma ${initData}`,
+    };
     return;
   }
 
