@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Routine Mini App</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --bg-accent: #dbeafe;
+      --card: rgba(255, 255, 255, 0.85);
+      --card-border: rgba(16, 24, 40, 0.08);
+      --ink: #0f172a;
+      --accent: #1d4ed8;
+      --danger: #c2725f;
+      --danger-soft: #f8ece8;
+      --danger-border: #e8c8be;
+      --ok: #0f766e;
+      --muted: #64748b;
+      --soft: #e2e8f0;
+      --shadow: 0 20px 45px rgba(15, 23, 42, 0.12);
+    }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(1200px 500px at -5% -5%, #dbeafe 0%, rgba(219, 234, 254, 0) 70%),
+        radial-gradient(1200px 500px at 110% -20%, #fef3c7 0%, rgba(254, 243, 199, 0) 75%),
+        linear-gradient(135deg, var(--bg), var(--bg-accent));
+      color: var(--ink);
+      font-family: "Avenir Next", "Segoe UI Variable", "Trebuchet MS", sans-serif;
+      min-height: 100vh;
+    }
+    .app { max-width: 960px; margin: 0 auto; padding: 18px 14px 24px; }
+    .hero { margin-bottom: 12px; animation: rise .35s ease-out; }
+    .title { font-size: 30px; font-weight: 900; margin: 0; letter-spacing: .2px; }
+    .subtitle { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+    .tabs {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+      padding: 8px; border-radius: 14px; background: rgba(255, 255, 255, .55); border: 1px solid var(--card-border);
+      backdrop-filter: blur(8px);
+      animation: rise .45s ease-out;
+    }
+    .tabs button, .btn {
+      border: 0; border-radius: 12px; padding: 10px 14px; font-weight: 750; cursor: pointer;
+      transition: transform .14s ease, box-shadow .14s ease, opacity .14s ease, background .14s ease;
+    }
+    .tabs button { background: transparent; color: var(--muted); }
+    .tabs button.active { background: #fff; color: var(--ink); box-shadow: 0 6px 18px rgba(15, 23, 42, .08); }
+    .tabs button:hover { transform: translateY(-1px); }
+    .card {
+      background: var(--card); border: 1px solid var(--card-border); border-radius: 18px; padding: 14px;
+      margin-bottom: 12px; box-shadow: var(--shadow); backdrop-filter: blur(10px);
+      animation: rise .35s ease-out;
+    }
+    .card h3 { margin: 0 0 10px; font-size: 18px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .btn { background: var(--accent); color: #fff; }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(29, 78, 216, .24); }
+    .btn:disabled, .tabs button:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+    .btn.warn { background: var(--danger); }
+    .btn.warn:hover { box-shadow: 0 8px 18px rgba(194, 114, 95, .22); }
+    .btn.ok { background: var(--ok); }
+    .btn.ok:hover { box-shadow: 0 8px 18px rgba(15, 118, 110, .2); }
+    .btn.gray { background: #64748b; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 10px; border-radius: 999px; background: #f8fafc; border: 1px solid var(--soft);
+      font-size: 12px; color: #334155; font-weight: 700;
+    }
+    .chip b { color: var(--ink); }
+    .status-chip {
+      padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px;
+      border: 1px solid transparent;
+    }
+    .status-planned { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+    .status-done { background: #ecfeff; color: #0f766e; border-color: #99f6e4; }
+    .status-canceled { background: #f8fafc; color: #475569; border-color: #cbd5e1; }
+    .status-failed { background: var(--danger-soft); color: #8c5143; border-color: var(--danger-border); }
+    input, select {
+      width: 100%; box-sizing: border-box; border-radius: 10px; border: 1px solid #cbd5e1;
+      padding: 10px; background: #fff; color: var(--ink); outline: none;
+    }
+    input:focus, select:focus {
+      border-color: #93c5fd;
+      box-shadow: 0 0 0 3px rgba(147, 197, 253, .25);
+    }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .list-item {
+      border: 1px solid var(--soft); background: #fff; border-radius: 14px; padding: 10px; margin-top: 8px;
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .list-item:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(15, 23, 42, .07); }
+    .item-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+    .task-title { font-size: 15px; font-weight: 800; }
+    .task-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .hidden { display: none; }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (max-width: 760px) {
+      .split { grid-template-columns: 1fr; }
+      .title { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="hero">
+      <h1 class="title">Routine Control Panel</h1>
+      <p class="subtitle">Flexible days and weeks, with penalties and settlement tracking</p>
+    </div>
+    <div class="tabs">
+      <button data-screen="dashboard" class="active">Dashboard</button>
+      <button data-screen="today">Today</button>
+      <button data-screen="week">This Week</button>
+      <button data-screen="backlog">Backlog</button>
+      <button data-screen="stats">Stats</button>
+    </div>
+
+    <section id="screen-dashboard" class="screen"></section>
+    <section id="screen-today" class="screen hidden"></section>
+    <section id="screen-week" class="screen hidden"></section>
+    <section id="screen-backlog" class="screen hidden"></section>
+    <section id="screen-stats" class="screen hidden"></section>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
