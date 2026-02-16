@@ -26,11 +26,7 @@ def _to_out(instance: Instance) -> InstanceOut:
 @router.get('', response_model=list[InstanceOut])
 def get_instances(scope: str, db: DBSession, user: CurrentUser):
     instances = list_instances(db, user.id, scope)
-    hydrated_ids = [inst.id for inst in instances]
-    if not hydrated_ids:
-        return []
-    with_tasks = db.scalars(select(Instance).where(Instance.id.in_(hydrated_ids))).all()
-    return [_to_out(inst) for inst in with_tasks]
+    return [_to_out(inst) for inst in instances]
 
 
 @router.put('/{instance_id}/status', response_model=InstanceOut)

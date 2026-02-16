@@ -15,6 +15,7 @@ const state = {
   localStarts: { day: null, week: null },
   statsDetail: null,
   activeStatsPeriod: null,
+  draggedTaskId: null,
 };
 
 const LOCAL_STARTS_KEY = 'routine_local_starts';
@@ -168,14 +169,34 @@ async function loadAll() {
 
 function instanceHtml(inst) {
   const penalty = instancePenaltyAmount(inst);
-  return `<div class="list-item">
+  return `<div class="list-item reorder-item" draggable="true" data-task-id="${inst.task_id}">
     <div class="item-head">
       <div class="task-title">${inst.task_title}</div>
-      ${statusDropdownHtml(inst)}
+      <div class="row">
+        <span class="drag-handle">⋮⋮</span>
+        ${statusDropdownHtml(inst)}
+      </div>
     </div>
     <div class="task-meta">
       <span class="chip">Type <b>${inst.task_kind}</b></span>
       <span class="chip">Penalty <b>${penalty ?? '-'} ${state.settings?.currency || ''}</b></span>
+    </div>
+  </div>`;
+}
+
+function doneInstanceHtml(inst) {
+  return `<div class="list-item reorder-item" draggable="true" data-task-id="${inst.task_id}">
+    <div class="item-head">
+      <div class="task-title">${inst.task_title}</div>
+      <div class="row">
+        <span class="drag-handle">⋮⋮</span>
+        ${statusDropdownHtml(inst)}
+      </div>
+    </div>
+    <div class="task-meta">
+      <span class="chip">Scope <b>${inst.scope}</b></span>
+      <span class="chip">Type <b>${inst.task_kind}</b></span>
+      <span class="chip">Penalty <b>${instancePenaltyAmount(inst) ?? '-'} ${state.settings?.currency || ''}</b></span>
     </div>
   </div>`;
 }
@@ -197,11 +218,15 @@ function renderDashboard() {
   const weeklyCount = state.tasks.filter(t => t.kind === 'weekly').length;
   const backlogCount = state.tasks.filter(t => t.kind === 'backlog').length;
   const backlogActive = state.tasks.filter(t => t.kind === 'backlog' && t.is_active);
-  const todayOpenItems = state.todayInstances.filter(i => i.status !== 'done');
-  const weekOpenItems = state.weekInstances.filter(i => i.status !== 'done');
+  const todayOpenItems = state.todayInstances.filter(i => i.status === 'planned');
+  const weekOpenItems = state.weekInstances.filter(i => i.status === 'planned');
   const doneItems = [
     ...state.todayInstances.filter(i => i.status === 'done').map(i => ({ ...i, scope: 'Today' })),
     ...state.weekInstances.filter(i => i.status === 'done').map(i => ({ ...i, scope: 'Week' })),
+  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const canceledFailedItems = [
+    ...state.todayInstances.filter(i => i.status === 'canceled' || i.status === 'failed').map(i => ({ ...i, scope: 'Today' })),
+    ...state.weekInstances.filter(i => i.status === 'canceled' || i.status === 'failed').map(i => ({ ...i, scope: 'Week' })),
   ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   q('screen-dashboard').innerHTML = `
     <div class="card">
@@ -224,7 +249,7 @@ function renderDashboard() {
 
     <div class="card">
       <h3>Today Instances</h3>
-      ${todayOpenItems.map(instanceHtml).join('') || '<div class="muted">No active today instances</div>'}
+      ${todayOpenItems.map(instanceHtml).join('') || '<div class="muted">No planned today instances</div>'}
       <div style="margin-top:10px;">
         <select id="backlog-to-today">${backlogActive.map(t => `<option value="${t.id}">${t.title}</option>`).join('')}</select>
         <div class="row" style="margin-top:8px;">
@@ -235,7 +260,7 @@ function renderDashboard() {
 
     <div class="card">
       <h3>Week Instances</h3>
-      ${weekOpenItems.map(instanceHtml).join('') || '<div class="muted">No active week instances</div>'}
+      ${weekOpenItems.map(instanceHtml).join('') || '<div class="muted">No planned week instances</div>'}
       <div style="margin-top:10px;">
         <select id="backlog-to-week">${backlogActive.map(t => `<option value="${t.id}">${t.title}</option>`).join('')}</select>
         <div class="row" style="margin-top:8px;">
@@ -246,17 +271,12 @@ function renderDashboard() {
 
     <div class="card">
       <h3>Done Tasks</h3>
-      ${doneItems.map(inst => `<div class="list-item">
-        <div class="item-head">
-          <div class="task-title">${inst.task_title}</div>
-          ${statusDropdownHtml(inst)}
-        </div>
-        <div class="task-meta">
-          <span class="chip">Scope <b>${inst.scope}</b></span>
-          <span class="chip">Type <b>${inst.task_kind}</b></span>
-          <span class="chip">Penalty <b>${instancePenaltyAmount(inst) ?? '-'} ${state.settings?.currency || ''}</b></span>
-        </div>
-      </div>`).join('') || '<div class="muted">No done tasks yet</div>'}
+      ${doneItems.map(doneInstanceHtml).join('') || '<div class="muted">No done tasks yet</div>'}
+    </div>
+
+    <div class="card">
+      <h3>Canceled & Failed</h3>
+      ${canceledFailedItems.map(doneInstanceHtml).join('') || '<div class="muted">No canceled or failed tasks</div>'}
     </div>
   `;
 }
@@ -284,10 +304,13 @@ function renderTasks() {
 
     <div class="card">
       <h3>All Tasks</h3>
-      ${state.tasks.map(t => `<div class="list-item">
+      ${state.tasks.map((t) => `<div class="list-item reorder-item" draggable="true" data-task-id="${t.id}">
         <div class="item-head">
           <div class="task-title">${t.title}</div>
-          <span class="chip">${t.kind}</span>
+          <div class="row">
+            <span class="drag-handle">⋮⋮</span>
+            <span class="chip">${t.kind}</span>
+          </div>
         </div>
         <div class="task-meta">
           <span class="chip">Active <b>${t.is_active ? 'yes' : 'no'}</b></span>
@@ -397,6 +420,7 @@ function renderAll() {
   renderTasks();
   renderBacklog();
   renderStats();
+  bindReorderDnD();
 }
 
 async function refreshAndRender() {
@@ -488,6 +512,59 @@ async function addBacklog(scope) {
   await refreshAndRender();
 }
 
+async function reorderTasksByDrop(draggedTaskId, targetTaskId) {
+  if (!draggedTaskId || !targetTaskId || draggedTaskId === targetTaskId) return;
+  const ids = state.tasks.map(t => t.id);
+  const from = ids.indexOf(draggedTaskId);
+  const to = ids.indexOf(targetTaskId);
+  if (from < 0 || to < 0) return;
+  ids.splice(from, 1);
+  ids.splice(to, 0, draggedTaskId);
+  await api('/tasks/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ ordered_ids: ids }),
+  });
+  await refreshAndRender();
+}
+
+function bindReorderDnD() {
+  const items = document.querySelectorAll('.reorder-item[data-task-id]');
+  items.forEach((item) => {
+    item.addEventListener('dragstart', (e) => {
+      const taskId = Number(item.dataset.taskId);
+      state.draggedTaskId = taskId;
+      item.classList.add('dragging');
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(taskId));
+      }
+    });
+
+    item.addEventListener('dragend', () => {
+      state.draggedTaskId = null;
+      document.querySelectorAll('.reorder-item.dragging').forEach(el => el.classList.remove('dragging'));
+      document.querySelectorAll('.reorder-item.drop-target').forEach(el => el.classList.remove('drop-target'));
+    });
+
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      item.classList.add('drop-target');
+    });
+
+    item.addEventListener('dragleave', () => {
+      item.classList.remove('drop-target');
+    });
+
+    item.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      item.classList.remove('drop-target');
+      const targetTaskId = Number(item.dataset.taskId);
+      const dragged = state.draggedTaskId || Number(e.dataTransfer?.getData('text/plain'));
+      await reorderTasksByDrop(dragged, targetTaskId);
+    });
+  });
+}
+
 async function clearStats() {
   if (!confirm('Delete all statistics (instances and day/week sessions)?')) return;
   await api('/stats', { method: 'DELETE' });
@@ -507,8 +584,11 @@ async function openStatsDetails(period) {
 function onStatusDetailsToggle(event) {
   const details = event.currentTarget;
   const parentItem = details.closest('.list-item');
+  const parentCard = details.closest('.card');
+  document.querySelectorAll('.card.status-open').forEach(el => el.classList.remove('status-open'));
   document.querySelectorAll('.list-item.status-open').forEach(el => el.classList.remove('status-open'));
   if (details.open && parentItem) parentItem.classList.add('status-open');
+  if (details.open && parentCard) parentCard.classList.add('status-open');
 }
 
 window.startDay = startDay;

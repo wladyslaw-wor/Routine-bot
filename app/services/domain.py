@@ -173,7 +173,10 @@ def list_instances(
         if not day:
             return []
         return db.scalars(
-            select(Instance).where(Instance.user_id == user_id, Instance.day_session_id == day.id).order_by(Instance.created_at.desc())
+            select(Instance)
+            .join(Task, Instance.task_id == Task.id)
+            .where(Instance.user_id == user_id, Instance.day_session_id == day.id)
+            .order_by(Task.order_index.asc(), Instance.created_at.asc())
         ).all()
 
     if scope == 'week':
@@ -181,7 +184,10 @@ def list_instances(
         if not week:
             return []
         return db.scalars(
-            select(Instance).where(Instance.user_id == user_id, Instance.week_session_id == week.id).order_by(Instance.created_at.desc())
+            select(Instance)
+            .join(Task, Instance.task_id == Task.id)
+            .where(Instance.user_id == user_id, Instance.week_session_id == week.id)
+            .order_by(Task.order_index.asc(), Instance.created_at.asc())
         ).all()
 
     if scope == 'history':

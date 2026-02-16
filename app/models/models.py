@@ -54,6 +54,7 @@ class Task(Base):
     title: Mapped[str] = mapped_column(String(255))
     kind: Mapped[TaskKind] = mapped_column(SqlEnum(TaskKind), index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    order_index: Mapped[int] = mapped_column(Integer, default=0, index=True)
     penalty_amount: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

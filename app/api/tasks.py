@@ -1,25 +1,42 @@
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DBSession
 from app.models.models import Task
-from app.schemas.common import TaskCreate, TaskOut, TaskUpdate
+from app.schemas.common import MessageOut, TaskCreate, TaskOut, TaskUpdate, TasksReorderIn
 
 router = APIRouter(prefix='/tasks', tags=['tasks'])
 
 
 @router.get('', response_model=list[TaskOut])
 def list_tasks(db: DBSession, user: CurrentUser):
-    return db.scalars(select(Task).where(Task.user_id == user.id).order_by(Task.created_at.desc())).all()
+    return db.scalars(select(Task).where(Task.user_id == user.id).order_by(Task.order_index.asc(), Task.created_at.asc())).all()
 
 
 @router.post('', response_model=TaskOut)
 def create_task(payload: TaskCreate, db: DBSession, user: CurrentUser):
-    task = Task(user_id=user.id, **payload.model_dump())
+    max_order = db.scalar(select(func.coalesce(func.max(Task.order_index), -1)).where(Task.user_id == user.id))
+    task = Task(user_id=user.id, order_index=int(max_order) + 1, **payload.model_dump())
     db.add(task)
     db.commit()
     db.refresh(task)
     return task
+
+
+@router.post('/reorder', response_model=MessageOut)
+def reorder_tasks(payload: TasksReorderIn, db: DBSession, user: CurrentUser):
+    tasks = db.scalars(select(Task).where(Task.user_id == user.id)).all()
+    by_id = {task.id: task for task in tasks}
+    ordered_ids = payload.ordered_ids
+
+    if len(ordered_ids) != len(tasks) or set(ordered_ids) != set(by_id.keys()):
+        raise HTTPException(status_code=400, detail='ordered_ids must contain all user task ids exactly once')
+
+    for idx, task_id in enumerate(ordered_ids):
+        by_id[task_id].order_index = idx
+
+    db.commit()
+    return {'message': 'Tasks reordered'}
 
 
 @router.put('/{task_id}', response_model=TaskOut)

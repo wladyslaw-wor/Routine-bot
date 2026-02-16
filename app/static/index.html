@@ -52,7 +52,11 @@
       background: var(--card); border: 1px solid var(--card-border); border-radius: 18px; padding: 14px;
       margin-bottom: 12px; box-shadow: var(--shadow); backdrop-filter: blur(10px);
       animation: rise .35s ease-out;
+      position: relative;
+      overflow: visible;
+      z-index: 1;
     }
+    .card.status-open { z-index: 95; }
     .card h3 { margin: 0 0 10px; font-size: 18px; }
     .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .btn { background: var(--accent); color: #fff; }
@@ -124,6 +128,10 @@
       overflow: visible;
       z-index: 1;
     }
+    .reorder-item { cursor: grab; }
+    .reorder-item.dragging { opacity: .45; }
+    .reorder-item.drop-target { outline: 2px dashed #93c5fd; outline-offset: 2px; }
+    .drag-handle { font-size: 14px; color: var(--muted); user-select: none; }
     .list-item:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(15, 23, 42, .07); }
     .list-item.status-open { z-index: 70; }
     .tile-btn {

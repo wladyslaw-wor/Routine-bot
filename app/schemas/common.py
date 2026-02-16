@@ -55,6 +55,7 @@ class TaskOut(BaseModel):
     title: str
     kind: TaskKind
     is_active: bool
+    order_index: int
     penalty_amount: Decimal | None = None
 
 
@@ -112,3 +113,7 @@ class StatsDetailsOut(BaseModel):
     total_penalty: Decimal
     status_counts: dict[str, int]
     rows: list[StatsDetailRow]
+
+
+class TasksReorderIn(BaseModel):
+    ordered_ids: list[int]
