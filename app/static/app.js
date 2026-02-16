@@ -16,6 +16,12 @@ const state = {
   statsDetail: null,
   activeStatsPeriod: null,
   draggedTaskId: null,
+  touchDrag: {
+    active: false,
+    taskId: null,
+    targetTaskId: null,
+    timer: null,
+  },
 };
 
 const LOCAL_STARTS_KEY = 'routine_local_starts';
@@ -562,7 +568,66 @@ function bindReorderDnD() {
       const dragged = state.draggedTaskId || Number(e.dataTransfer?.getData('text/plain'));
       await reorderTasksByDrop(dragged, targetTaskId);
     });
+
+    bindTouchDnDItem(item);
   });
+}
+
+function clearTouchDragVisuals() {
+  document.querySelectorAll('.reorder-item.dragging').forEach(el => el.classList.remove('dragging'));
+  document.querySelectorAll('.reorder-item.drop-target').forEach(el => el.classList.remove('drop-target'));
+}
+
+function resetTouchDrag() {
+  if (state.touchDrag.timer) {
+    clearTimeout(state.touchDrag.timer);
+    state.touchDrag.timer = null;
+  }
+  state.touchDrag.active = false;
+  state.touchDrag.taskId = null;
+  state.touchDrag.targetTaskId = null;
+  clearTouchDragVisuals();
+}
+
+function bindTouchDnDItem(item) {
+  item.addEventListener('touchstart', (e) => {
+    if (e.target.closest('.status-dd')) return;
+    if (state.touchDrag.timer) clearTimeout(state.touchDrag.timer);
+    const taskId = Number(item.dataset.taskId);
+    state.touchDrag.timer = setTimeout(() => {
+      state.touchDrag.active = true;
+      state.touchDrag.taskId = taskId;
+      state.touchDrag.targetTaskId = taskId;
+      item.classList.add('dragging');
+    }, 220);
+  }, { passive: true });
+
+  item.addEventListener('touchmove', (e) => {
+    if (!state.touchDrag.active) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const target = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.reorder-item[data-task-id]');
+    document.querySelectorAll('.reorder-item.drop-target').forEach(el => el.classList.remove('drop-target'));
+    if (target) {
+      target.classList.add('drop-target');
+      state.touchDrag.targetTaskId = Number(target.dataset.taskId);
+    }
+  }, { passive: false });
+
+  item.addEventListener('touchend', async () => {
+    if (!state.touchDrag.active) {
+      resetTouchDrag();
+      return;
+    }
+    const from = state.touchDrag.taskId;
+    const to = state.touchDrag.targetTaskId;
+    resetTouchDrag();
+    await reorderTasksByDrop(from, to);
+  }, { passive: true });
+
+  item.addEventListener('touchcancel', () => {
+    resetTouchDrag();
+  }, { passive: true });
 }
 
 async function clearStats() {
