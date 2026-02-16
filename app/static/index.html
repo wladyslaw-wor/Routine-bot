@@ -74,6 +74,36 @@
       padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px;
       border: 1px solid transparent;
     }
+    .status-action { cursor: pointer; }
+    .status-dd { position: relative; z-index: 1; }
+    .status-dd[open] { z-index: 80; }
+    .status-dd > summary { list-style: none; }
+    .status-dd > summary::-webkit-details-marker { display: none; }
+    .status-menu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      min-width: 130px;
+      background: #fff;
+      border: 1px solid var(--soft);
+      border-radius: 10px;
+      box-shadow: 0 14px 28px rgba(15, 23, 42, .14);
+      padding: 6px;
+      z-index: 25;
+    }
+    .status-menu-item {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      border-radius: 8px;
+      text-align: left;
+      padding: 7px 8px;
+      font-weight: 700;
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .status-menu-item:hover { background: #f1f5f9; }
+    .status-menu-item.active { background: #eff6ff; color: #1d4ed8; }
     .status-planned { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
     .status-done { background: #ecfeff; color: #0f766e; border-color: #99f6e4; }
     .status-canceled { background: #f8fafc; color: #475569; border-color: #cbd5e1; }
@@ -90,8 +120,23 @@
     .list-item {
       border: 1px solid var(--soft); background: #fff; border-radius: 14px; padding: 10px; margin-top: 8px;
       transition: transform .12s ease, box-shadow .12s ease;
+      position: relative;
+      overflow: visible;
+      z-index: 1;
     }
     .list-item:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(15, 23, 42, .07); }
+    .list-item.status-open { z-index: 70; }
+    .tile-btn {
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      border: 1px solid var(--soft);
+      background: #fff;
+    }
+    .tile-btn.active {
+      border-color: #93c5fd;
+      box-shadow: 0 0 0 3px rgba(147, 197, 253, .2);
+    }
     .item-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
     .task-title { font-size: 15px; font-weight: 800; }
     .task-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -114,18 +159,17 @@
     </div>
     <div class="tabs">
       <button data-screen="dashboard" class="active">Dashboard</button>
-      <button data-screen="today">Today</button>
-      <button data-screen="week">This Week</button>
+      <button data-screen="tasks">Tasks</button>
       <button data-screen="backlog">Backlog</button>
       <button data-screen="stats">Stats</button>
     </div>
 
     <section id="screen-dashboard" class="screen"></section>
-    <section id="screen-today" class="screen hidden"></section>
-    <section id="screen-week" class="screen hidden"></section>
+    <section id="screen-tasks" class="screen hidden"></section>
     <section id="screen-backlog" class="screen hidden"></section>
     <section id="screen-stats" class="screen hidden"></section>
   </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>

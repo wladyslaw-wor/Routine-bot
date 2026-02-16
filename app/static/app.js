@@ -13,6 +13,8 @@ const state = {
   settings: null,
   dashboard: null,
   localStarts: { day: null, week: null },
+  statsDetail: null,
+  activeStatsPeriod: null,
 };
 
 const LOCAL_STARTS_KEY = 'routine_local_starts';
@@ -86,6 +88,30 @@ async function api(path, options = {}) {
 
 function q(id) { return document.getElementById(id); }
 
+function resolveTaskPenaltyAmount(task) {
+  if (!task || !state.settings) return null;
+  if (task.penalty_amount !== null && task.penalty_amount !== undefined) return task.penalty_amount;
+  if (task.kind === 'weekly') return state.settings.penalty_weekly_default;
+  return state.settings.penalty_daily_default;
+}
+
+function instancePenaltyAmount(inst) {
+  if (inst.penalty_applied !== null && inst.penalty_applied !== undefined) return inst.penalty_applied;
+  const task = state.tasks.find(t => t.id === inst.task_id);
+  return resolveTaskPenaltyAmount(task);
+}
+
+function statusDropdownHtml(inst) {
+  const statuses = ['planned', 'done', 'canceled', 'failed'];
+  const options = statuses.map(s => (
+    `<button type="button" class="status-menu-item ${inst.status === s ? 'active' : ''}" onclick="setInstanceStatus(${inst.id},'${s}')">${s}</button>`
+  )).join('');
+  return `<details class="status-dd" ontoggle="onStatusDetailsToggle(event)">
+    <summary class="status-chip status-action status-${inst.status}">${inst.status}</summary>
+    <div class="status-menu">${options}</div>
+  </details>`;
+}
+
 function toLocalDateTimeLabel(isoValue) {
   if (!isoValue) return '';
   const dt = new Date(isoValue);
@@ -96,6 +122,17 @@ function toLocalDateTimeLabel(isoValue) {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+  });
+}
+
+function toLocalDateLabel(isoValue) {
+  if (!isoValue) return '';
+  const dt = new Date(isoValue);
+  if (Number.isNaN(dt.getTime())) return '';
+  return dt.toLocaleDateString([], {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   });
 }
 
@@ -130,20 +167,15 @@ async function loadAll() {
 }
 
 function instanceHtml(inst) {
-  const statusClass = `status-${inst.status}`;
+  const penalty = instancePenaltyAmount(inst);
   return `<div class="list-item">
     <div class="item-head">
       <div class="task-title">${inst.task_title}</div>
-      <span class="status-chip ${statusClass}">${inst.status}</span>
+      ${statusDropdownHtml(inst)}
     </div>
     <div class="task-meta">
       <span class="chip">Type <b>${inst.task_kind}</b></span>
-      <span class="chip">Penalty <b>${inst.penalty_applied || '-'} ${state.settings?.currency || ''}</b></span>
-    </div>
-    <div class="row">
-      <button class="btn ok" onclick="setInstanceStatus(${inst.id},'done')">Done</button>
-      <button class="btn gray" onclick="setInstanceStatus(${inst.id},'canceled')">Cancel</button>
-      <button class="btn warn" onclick="setInstanceStatus(${inst.id},'failed')">Fail</button>
+      <span class="chip">Penalty <b>${penalty ?? '-'} ${state.settings?.currency || ''}</b></span>
     </div>
   </div>`;
 }
@@ -164,6 +196,13 @@ function renderDashboard() {
   const dailyCount = state.tasks.filter(t => t.kind === 'daily').length;
   const weeklyCount = state.tasks.filter(t => t.kind === 'weekly').length;
   const backlogCount = state.tasks.filter(t => t.kind === 'backlog').length;
+  const backlogActive = state.tasks.filter(t => t.kind === 'backlog' && t.is_active);
+  const todayOpenItems = state.todayInstances.filter(i => i.status !== 'done');
+  const weekOpenItems = state.weekInstances.filter(i => i.status !== 'done');
+  const doneItems = [
+    ...state.todayInstances.filter(i => i.status === 'done').map(i => ({ ...i, scope: 'Today' })),
+    ...state.weekInstances.filter(i => i.status === 'done').map(i => ({ ...i, scope: 'Week' })),
+  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   q('screen-dashboard').innerHTML = `
     <div class="card">
       <div class="row" style="margin-bottom:10px;">
@@ -183,6 +222,47 @@ function renderDashboard() {
       </div>
     </div>
 
+    <div class="card">
+      <h3>Today Instances</h3>
+      ${todayOpenItems.map(instanceHtml).join('') || '<div class="muted">No active today instances</div>'}
+      <div style="margin-top:10px;">
+        <select id="backlog-to-today">${backlogActive.map(t => `<option value="${t.id}">${t.title}</option>`).join('')}</select>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn" onclick="addBacklog('today')">Add Backlog to Today</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Week Instances</h3>
+      ${weekOpenItems.map(instanceHtml).join('') || '<div class="muted">No active week instances</div>'}
+      <div style="margin-top:10px;">
+        <select id="backlog-to-week">${backlogActive.map(t => `<option value="${t.id}">${t.title}</option>`).join('')}</select>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn" onclick="addBacklog('week')">Add Backlog to Week</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Done Tasks</h3>
+      ${doneItems.map(inst => `<div class="list-item">
+        <div class="item-head">
+          <div class="task-title">${inst.task_title}</div>
+          ${statusDropdownHtml(inst)}
+        </div>
+        <div class="task-meta">
+          <span class="chip">Scope <b>${inst.scope}</b></span>
+          <span class="chip">Type <b>${inst.task_kind}</b></span>
+          <span class="chip">Penalty <b>${instancePenaltyAmount(inst) ?? '-'} ${state.settings?.currency || ''}</b></span>
+        </div>
+      </div>`).join('') || '<div class="muted">No done tasks yet</div>'}
+    </div>
+  `;
+}
+
+function renderTasks() {
+  q('screen-tasks').innerHTML = `
     <div class="card">
       <h3>Create Task</h3>
       <div class="split">
@@ -211,45 +291,13 @@ function renderDashboard() {
         </div>
         <div class="task-meta">
           <span class="chip">Active <b>${t.is_active ? 'yes' : 'no'}</b></span>
-          <span class="chip">Penalty <b>${t.penalty_amount || 'default'}</b></span>
+          <span class="chip">Penalty <b>${resolveTaskPenaltyAmount(t)} ${state.settings?.currency || ''}</b></span>
         </div>
         <div class="row">
           <button class="btn gray" onclick="editTask(${t.id})">Edit</button>
           <button class="btn warn" onclick="deleteTask(${t.id})">Delete</button>
         </div>
       </div>`).join('') || '<div class="muted">No tasks</div>'}
-    </div>
-  `;
-}
-
-function renderToday() {
-  const backlog = state.tasks.filter(t => t.kind === 'backlog' && t.is_active);
-  q('screen-today').innerHTML = `
-    <div class="card">
-      <h3>Today Instances</h3>
-      ${state.todayInstances.map(instanceHtml).join('') || '<div class="muted">No today instances</div>'}
-    </div>
-
-    <div class="card">
-      <h3>Add Backlog to Today</h3>
-      <select id="backlog-to-today">${backlog.map(t => `<option value="${t.id}">${t.title}</option>`).join('')}</select>
-      <div class="row" style="margin-top:8px;"><button class="btn" onclick="addBacklog('today')">Add</button></div>
-    </div>
-  `;
-}
-
-function renderWeek() {
-  const backlog = state.tasks.filter(t => t.kind === 'backlog' && t.is_active);
-  q('screen-week').innerHTML = `
-    <div class="card">
-      <h3>Week Instances</h3>
-      ${state.weekInstances.map(instanceHtml).join('') || '<div class="muted">No week instances</div>'}
-    </div>
-
-    <div class="card">
-      <h3>Add Backlog to This Week</h3>
-      <select id="backlog-to-week">${backlog.map(t => `<option value="${t.id}">${t.title}</option>`).join('')}</select>
-      <div class="row" style="margin-top:8px;"><button class="btn" onclick="addBacklog('week')">Add</button></div>
     </div>
   `;
 }
@@ -266,7 +314,7 @@ function renderBacklog() {
         </div>
         <div class="task-meta">
           <span class="chip">Active <b>${t.is_active ? 'yes' : 'no'}</b></span>
-          <span class="chip">Penalty <b>${t.penalty_amount || 'default'}</b></span>
+          <span class="chip">Penalty <b>${resolveTaskPenaltyAmount(t)} ${state.settings?.currency || ''}</b></span>
         </div>
       </div>`).join('') || '<div class="muted">No backlog tasks</div>'}
     </div>
@@ -278,7 +326,7 @@ async function renderStats() {
   const rows = [];
   for (const p of periods) {
     const s = await api(`/stats?period=${p}`);
-    rows.push(`<div class="list-item">
+    rows.push(`<button type="button" class="list-item tile-btn ${state.activeStatsPeriod === p ? 'active' : ''}" onclick="openStatsDetails('${p}')">
       <div class="item-head">
         <div class="task-title">${p}</div>
         <span class="chip">Failed <b>${s.failed_count}</b></span>
@@ -286,24 +334,67 @@ async function renderStats() {
       <div class="task-meta">
         <span class="chip">Penalty <b>${s.total_penalty} ${state.settings.currency}</b></span>
       </div>
-    </div>`);
+    </button>`);
   }
+  const detail = state.statsDetail;
+  let groupedDetailsHtml = '';
+  if (detail && detail.rows.length) {
+    const dayMap = new Map();
+    detail.rows.forEach(r => {
+      const dayKey = toLocalDateLabel(r.started_at);
+      if (!dayMap.has(dayKey)) dayMap.set(dayKey, { total: 0, items: [] });
+      const group = dayMap.get(dayKey);
+      group.total += Number(r.total_penalty || 0);
+      group.items.push(r);
+    });
+    groupedDetailsHtml = Array.from(dayMap.entries()).map(([day, group]) => `
+      <div class="list-item" style="margin-top:10px;">
+        <div class="item-head">
+          <div class="task-title">${day}</div>
+          <span class="chip">Day total <b>${group.total.toFixed(2)} ${state.settings.currency}</b></span>
+        </div>
+        ${group.items.map(r => `<div class="list-item">
+          <div class="item-head">
+            <div class="task-title">${r.task_title}</div>
+            <span class="status-chip status-${r.status}">${r.status}</span>
+          </div>
+          <div class="task-meta">
+            <span class="chip">Started <b>${toLocalDateTimeLabel(r.started_at)}</b></span>
+            <span class="chip">Penalty <b>${r.total_penalty} ${state.settings.currency}</b></span>
+          </div>
+        </div>`).join('')}
+      </div>
+    `).join('');
+  }
+  const detailHtml = detail ? `
+    <div class="card" style="margin-top:10px;">
+      <h3>${detail.period} details</h3>
+      <div class="task-meta">
+        <span class="chip">Planned <b>${detail.status_counts.planned}</b></span>
+        <span class="chip">Done <b>${detail.status_counts.done}</b></span>
+        <span class="chip">Canceled <b>${detail.status_counts.canceled}</b></span>
+        <span class="chip">Failed <b>${detail.status_counts.failed}</b></span>
+        <span class="chip">Penalty <b>${detail.total_penalty} ${state.settings.currency}</b></span>
+      </div>
+      ${groupedDetailsHtml || '<div class="muted">No data for selected period</div>'}
+    </div>
+  ` : '';
   q('screen-stats').innerHTML = `
     <div class="card">
       <div class="item-head">
         <h3>Penalty Stats</h3>
         <button class="btn warn" onclick="clearStats()">Clear Stats</button>
       </div>
-      <p class="muted">Will delete all instance history and day/week sessions.</p>
+      <p class="muted">Tap a tile to open detailed statistics. Clear will delete all instance history and day/week sessions.</p>
       ${rows.join('')}
     </div>
+    ${detailHtml}
   `;
 }
 
 function renderAll() {
   renderDashboard();
-  renderToday();
-  renderWeek();
+  renderTasks();
   renderBacklog();
   renderStats();
 }
@@ -400,9 +491,24 @@ async function addBacklog(scope) {
 async function clearStats() {
   if (!confirm('Delete all statistics (instances and day/week sessions)?')) return;
   await api('/stats', { method: 'DELETE' });
+  state.activeStatsPeriod = null;
+  state.statsDetail = null;
   clearLocalStart('day');
   clearLocalStart('week');
   await refreshAndRender();
+}
+
+async function openStatsDetails(period) {
+  state.activeStatsPeriod = period;
+  state.statsDetail = await api(`/stats/details?period=${period}`);
+  await renderStats();
+}
+
+function onStatusDetailsToggle(event) {
+  const details = event.currentTarget;
+  const parentItem = details.closest('.list-item');
+  document.querySelectorAll('.list-item.status-open').forEach(el => el.classList.remove('status-open'));
+  if (details.open && parentItem) parentItem.classList.add('status-open');
 }
 
 window.startDay = startDay;
@@ -415,6 +521,8 @@ window.deleteTask = deleteTask;
 window.setInstanceStatus = setInstanceStatus;
 window.addBacklog = addBacklog;
 window.clearStats = clearStats;
+window.openStatsDetails = openStatsDetails;
+window.onStatusDetailsToggle = onStatusDetailsToggle;
 
 async function init() {
   loadLocalStarts();

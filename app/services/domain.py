@@ -257,3 +257,61 @@ def stats_penalty(db: Session, user_id: int, period: str) -> tuple[int, Decimal]
 
     count, total = db.execute(failed).one()
     return int(count), Decimal(total)
+
+
+def _stats_period_filters(user_id: int, period: str) -> list:
+    filters = [Instance.user_id == user_id]
+    if period == 'days':
+        filters.append(Instance.day_session_id.is_not(None))
+    elif period == 'weeks':
+        filters.append(Instance.week_session_id.is_not(None))
+    elif period == 'months':
+        pass
+    else:
+        raise HTTPException(status_code=400, detail='period must be days, weeks, or months')
+    return filters
+
+
+def stats_details(db: Session, user_id: int, period: str) -> dict:
+    filters = _stats_period_filters(user_id, period)
+
+    status_rows = db.execute(
+        select(Instance.status, func.count(Instance.id)).where(*filters).group_by(Instance.status)
+    ).all()
+    status_counts = {status.value: int(count) for status, count in status_rows}
+    for key in ['planned', 'done', 'canceled', 'failed']:
+        status_counts.setdefault(key, 0)
+
+    total_penalty = Decimal(
+        db.scalar(select(func.coalesce(func.sum(Instance.penalty_applied), 0)).where(*filters, Instance.status == InstanceStatus.failed))
+    )
+
+    rows = db.execute(
+        select(
+            Task.title,
+            Instance.status,
+            Instance.created_at,
+            func.coalesce(Instance.penalty_applied, 0),
+        )
+        .join(Task, Instance.task_id == Task.id)
+        .where(*filters)
+        .order_by(Instance.created_at.desc())
+        .limit(200)
+    ).all()
+
+    detail_rows = [
+        {
+            'task_title': task_title,
+            'status': status,
+            'started_at': started_at,
+            'total_penalty': Decimal(penalty_value),
+        }
+        for task_title, status, started_at, penalty_value in rows
+    ]
+
+    return {
+        'period': period,
+        'total_penalty': total_penalty,
+        'status_counts': status_counts,
+        'rows': detail_rows,
+    }

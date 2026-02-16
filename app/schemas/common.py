@@ -98,3 +98,17 @@ class StatsOut(BaseModel):
     period: str
     failed_count: int
     total_penalty: Decimal
+
+
+class StatsDetailRow(BaseModel):
+    task_title: str
+    status: InstanceStatus
+    started_at: datetime
+    total_penalty: Decimal
+
+
+class StatsDetailsOut(BaseModel):
+    period: str
+    total_penalty: Decimal
+    status_counts: dict[str, int]
+    rows: list[StatsDetailRow]
